@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input, button { margin: 5px; padding: 8px; }
+        table { border-collapse: collapse; margin-top: 10px; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Student API Test</h1>
+
+    <h2>1. Login</h2>
+    <input type="text" id="email" placeholder="Email" value="superadmin@example.com">
+    <input type="password" id="password" placeholder="Password" value="password123">
+    <button onclick="login()">Login</button>
+    <p><strong>Token:</strong> <span id="token"></span></p>
+    <hr>
+
+    <h2>2. Students List</h2>
+    <button onclick="getStudents()">Refresh Students</button>
+    <table id="studentsTable">
+        <thead>
+            <tr>
+                <th>ID</th><th>Name</th><th>Email</th><th>NIM</th><th>Jurusan</th><th>Actions</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <hr>
+
+    <h2>3. Add/Edit Student</h2>
+    <input type="hidden" id="editId">
+    <input type="text" id="name" placeholder="Name">
+    <input type="text" id="emailStudent" placeholder="Email">
+    <input type="text" id="nim" placeholder="NIM">
+    <input type="text" id="jurusan" placeholder="Jurusan">
+    <button onclick="saveStudent()">Save Student</button>
+    <button onclick="resetForm()">Cancel</button>
+
+    <script>
+        let apiUrl = "http://localhost:8080/api";
+        let token = "";
+
+        // Login
+        function login() {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+
+            fetch(`${apiUrl}/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            })
+            .then(res => res.text())
+            .then(text => {
+                console.log("Login API raw response:", text);
+                if (!text || text.trim() === "") {
+                    alert("API returned empty response!");
+                    return;
+                }
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error("Invalid JSON:", text);
+                    alert("API did not return valid JSON!");
+                    return;
+                }
+                if (data.token) {
+                    token = data.token;
+                    document.getElementById("token").innerText = token;
+                    alert("Login success!");
+                } else {
+                    alert(data.message || "Login failed");
+                }
+            })
+            .catch(err => {
+                console.error("Fetch error:", err);
+                alert("Fetch failed: " + err.message);
+            });
+        }
+
+        // Get all students
+        function getStudents() {
+            fetch(`${apiUrl}/students`, {
+                headers: { "Authorization": "Bearer " + token }
+            })
+            .then(res => res.text())
+            .then(text => {
+                console.log("Get students raw response:", text);
+                if (!text || text.trim() === "") {
+                    alert("API returned empty response!");
+                    return;
+                }
+                let data = JSON.parse(text);
+                const tbody = document.querySelector("#studentsTable tbody");
+                tbody.innerHTML = "";
+                data.forEach(s => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${s.id}</td>
+                        <td>${s.name}</td>
+                        <td>${s.email}</td>
+                        <td>${s.nim}</td>
+                        <td>${s.jurusan}</td>
+                        <td>
+                            <button onclick="editStudent(${s.id}, '${s.name}', '${s.email}', '${s.nim}', '${s.jurusan}')">Edit</button>
+                            <button onclick="deleteStudent(${s.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }).catch(err => {
+                console.error("Error fetching students:", err);
+                alert("Failed to fetch students");
+            });
+        }
+
+        // Add/Edit student
+        function saveStudent() {
+            const id = document.getElementById("editId").value;
+            const name = document.getElementById("name").value;
+            const email = document.getElementById("emailStudent").value;
+            const nim = document.getElementById("nim").value;
+            const jurusan = document.getElementById("jurusan").value;
+
+            const method = id ? "PUT" : "POST";
+            const url = id ? `${apiUrl}/students/${id}` : `${apiUrl}/students`;
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + token
+                },
+                body: JSON.stringify({ name, email, nim, jurusan })
+            })
+            .then(res => res.text())
+            .then(text => {
+                console.log("Save student raw response:", text);
+                if (!text || text.trim() === "") {
+                    alert("API returned empty response!");
+                    return;
+                }
+                let data = JSON.parse(text);
+                alert(data.message || "Success");
+                getStudents();
+                resetForm();
+            }).catch(err => {
+                console.error("Error saving student:", err);
+                alert("Failed to save student: " + err.message);
+            });
+        }
+
+        // Edit student (populate form)
+        function editStudent(id, name, email, nim, jurusan) {
+            document.getElementById("editId").value = id;
+            document.getElementById("name").value = name;
+            document.getElementById("emailStudent").value = email;
+            document.getElementById("nim").value = nim;
+            document.getElementById("jurusan").value = jurusan;
+        }
+
+        // Delete student
+        function deleteStudent(id) {
+            if (confirm("Are you sure to delete this student?")) {
+                fetch(`${apiUrl}/students/${id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": "Bearer " + token }
+                })
+                .then(res => res.text())
+                .then(text => {
+                    console.log("Delete student raw response:", text);
+                    if (!text || text.trim() === "") {
+                        alert("API returned empty response!");
+                        return;
+                    }
+                    let data = JSON.parse(text);
+                    alert(data.message || "Deleted");
+                    getStudents();
+                }).catch(err => {
+                    console.error("Error deleting student:", err);
+                    alert("Failed to delete student");
+                });
+            }
+        }
+
+        // Reset form
+        function resetForm() {
+            document.getElementById("editId").value = "";
+            document.getElementById("name").value = "";
+            document.getElementById("emailStudent").value = "";
+            document.getElementById("nim").value = "";
+            document.getElementById("jurusan").value = "";
+        }
+    </script>
+</body>
+</html>
